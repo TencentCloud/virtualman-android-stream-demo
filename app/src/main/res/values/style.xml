@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+
+<!--        <item name="android:windowActionBar">@null</item>-->
+    </style>
+
+    <!--自定义Dialog样式-->
+    <style name="MyDialog" parent="android:style/Theme.Dialog">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowTranslucentStatus">true</item>
+    </style>
+
+    <style name="AppTheme.StartWindowTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+
+        <item name="android:windowBackground">@drawable/bg_splash_view</item>
+    </style>
+
+    <declare-styleable name="WaveView">
+        <attr name="waveColor" format="color"/>
+        <attr name="baselineColor" format="color"/>
+        <attr name="maxValue" format="integer"/>
+        <attr name="waveStokeWidth" format="dimension"/>
+        <attr name="invalidateTime" format="integer"/>
+        <attr name="space" format="dimension"/>
+    </declare-styleable>
+
+    <declare-styleable name="LineWaveVoiceView">
+        <attr name="voiceLineColor" format="color"/>
+        <attr name="voiceLineWidth" format="dimension"/>
+        <attr name="imageWidth" format="dimension"/>
+    </declare-styleable>
+
+    <declare-styleable name="PagerSnapScrollView">
+        <attr name="maxHeight" format="dimension"/>
+    </declare-styleable>
+
+    <declare-styleable name="RoundRelativeLayout">
+        <attr name="rlRadius" format="dimension" />
+        <attr name="rlClipBackground" format="boolean" />
+    </declare-styleable>
+
+    <declare-styleable name="RealtimeBlurView">
+        <attr format="dimension" name="realtimeBlurRadius"/>
+        <attr format="float" name="realtimeDownsampleFactor"/>
+        <attr format="color" name="realtimeOverlayColor"/>
+    </declare-styleable>
+
+    <style name="SwitchButtonStyle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">32sp</item>
+        <item name="android:textColor">#E6FFFFFF</item>
+    </style>
+
+    <style name="BottomAnimation" parent="android:Animation">
+        <item name="android:windowEnterAnimation">@anim/anim_left_in</item>
+        <item name="android:windowExitAnimation">@anim/anim_left_out</item>
+    </style>
+
+    <style name="CustomScrollbar">
+        <item name="android:scrollbarThumbVertical">@drawable/custom_scrollbar</item>
+    </style>
+
+</resources>

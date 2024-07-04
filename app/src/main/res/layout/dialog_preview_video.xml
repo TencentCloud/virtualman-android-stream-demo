@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cl_preview_video"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_gravity="center"
+    android:background="@drawable/bg_gradient_all_alpha"
+    android:clipChildren="false">
+
+    <FrameLayout
+        android:id="@+id/fl_preview_video"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_round_all_white_alpha_r50"
+        android:clickable="true">
+
+        <com.tencent.virtualman_demo_app.view.blur.RealtimeBlurView
+            android:id="@+id/blurView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:layout_margin="40dp"
+            app:realtimeBlurRadius="30dp"
+            app:realtimeOverlayColor="#CCE1EBF7" />
+
+        <com.tencent.virtualman_demo_app.view.video.JzvdStdCustom
+            android:id="@+id/jsc_preview_video"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="40dp" />
+
+        <ImageButton
+            android:id="@+id/ibtn_preview_video_error"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="-36dp"
+            android:layout_marginEnd="-36dp"
+            android:background="@mipmap/icon_error" />
+    </FrameLayout>
+
+</FrameLayout>
