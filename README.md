@@ -49,6 +49,6 @@ SDK 支持两种建流方式：
 
 ## 运行步骤
 
-1. 在腾讯云控制台获取您的 AppKey、AccessToken 等配置信息
+1. 在数智人平台获取您的 AppKey、AccessToken 等配置信息
 2. 替换 `Config.kt` 中的配置参数
 3. 编译运行项目
