@@ -2,23 +2,53 @@
 
 ## 项目说明
 
-app 目录为接入 sdk 的 demo 示例，其中此 demo 额外包含了腾讯云 ASR（语音识别）的示例，以及包含了基础的对话及消息展示的 UI 的示例，若要正常运行此 demo，需要在 app/src/main/java/Config 中配置您自己数智人项目的相关 key 和您腾讯云 ASR 相关的账号信息。
+本项目是腾讯云数智人 Android SDK 的简化 demo 示例，展示了数智人云端推流的基本使用方法。
 
-```Kotlin
-// 数智人及ASR等全局参数
+## 环境要求
+
+- Android Studio
+- Android SDK API 21+
+- 目标 API 33+
+- 支持架构：armeabi-v7a, arm64-v8a
+
+## SDK 版本
+
+- 数智人 SDK：2.2.6
+- TRTC SDK：13.0.0.19666
+
+## 配置说明
+
+运行 demo 前，需要在 `app/src/main/java/com/tencent/virtualman_demo_app/Config.kt` 中配置您的数智人项目信息：
+
+```kotlin
 object Config {
-    // 数智人key
-    const val APP_KEY = "xxx"
-    // 数智人token
-    const val ACCESS_TOKEN = "xxx"
-    // 数智人virtualmanProjectId
-    const val VIRTUALMAN_PROJECT_ID = "xxx"
-
-    // ASR账号 app id
-    const val ASR_APP_ID = xxx
-    // ASR账号 SecretId
-    const val ASR_SECRET_ID = "xxx"
-    // ASR账号 SecretKey
-    const val ASR_SECRET_KEY = "xxx"
+    // 数智人 AppKey
+    const val APP_KEY = "your_app_key"
+    
+    // 数智人 AccessToken  
+    const val ACCESS_TOKEN = "your_access_token"
+    
+    // ========== 建流方式1: AssetVirtualman ==========
+    // 数智人形象 Key
+    const val ASSET_VIRTUALMAN_KEY = "your_asset_virtualman_key"
+    
+    // ========== 建流方式2: VirtualmanProject ==========
+    // 数智人项目 ID
+    const val VIRTUALMAN_PROJECT_ID = "your_virtualman_project_id"
 }
 ```
+
+## 建流方式
+
+SDK 支持两种建流方式：
+
+1. **AssetVirtualman**：使用数智人形象 Key 直接建流
+2. **VirtualmanProject**：使用数智人项目 ID 建流
+
+根据您的业务需求选择对应的方式，并配置相应的参数。
+
+## 运行步骤
+
+1. 在腾讯云控制台获取您的 AppKey、AccessToken 等配置信息
+2. 替换 `Config.kt` 中的配置参数
+3. 编译运行项目

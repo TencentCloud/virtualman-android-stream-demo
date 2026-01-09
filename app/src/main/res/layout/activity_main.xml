@@ -4,156 +4,244 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#1a1a2e"
     tools:context=".MainActivity">
 
-    <com.tencent.virtualman.Virtualman
-        android:id="@+id/virtualman"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        tools:ignore="MissingConstraints" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:visibility="gone"
-        android:id="@+id/rv_room"
-        android:overScrollMode="never"
+    <!-- 大容器：全屏 -->
+    <FrameLayout
+        android:id="@+id/container_big"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_centerInParent="true"
-        app:layout_constraintHeight_percent="0.58"
-        app:layout_constraintBottom_toBottomOf="parent"/>
+        android:layout_height="match_parent" />
 
-    <com.tencent.virtualman_demo_app.view.PagerSnapScrollView
-        android:id="@+id/pssv_room_ask"
+    <!-- 小容器：右下角 -->
+    <FrameLayout
+        android:id="@+id/container_small"
+        android:layout_width="150dp"
+        android:layout_height="200dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="240dp"
+        android:background="#40FFFFFF"
         android:visibility="gone"
-        android:scrollbars="none"
-        android:layout_marginStart="180dp"
-        android:layout_marginTop="30dp"
-        android:layout_marginBottom="60dp"
-        android:layout_marginEnd="80dp"
-        android:layout_gravity="end"
-        app:maxHeight="580dp"
-        android:background="@drawable/bg_round_blue_r10"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintBottom_toTopOf="@id/rv_room"
-        app:layout_constraintRight_toRightOf="parent">
-
-        <FrameLayout
-            android:layout_gravity="end"
-            android:padding="40dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-
-            <TextView
-                android:id="@+id/tv_room_item_text"
-                android:textColor="@color/white"
-                android:textSize="36sp"
-                android:maxWidth="544dp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
-
-        </FrameLayout>
-
-    </com.tencent.virtualman_demo_app.view.PagerSnapScrollView>
-
-    <!-- 开始对话按钮背景渐变遮罩 -->
-    <LinearLayout
-        android:visibility="gone"
-        android:id="@+id/start_talk_btn_mask"
-        android:layout_width="match_parent"
-        android:layout_height="800dp"
-        android:background="@drawable/bg_gradient_bottom_white"
-        android:orientation="vertical"
-        android:elevation="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent">
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    </LinearLayout>
-
-    <!-- 开始对话按钮 -->
+    <!-- 顶部信息栏 -->
     <LinearLayout
-        android:visibility="gone"
-        android:id="@+id/start_talk_btn"
-        android:layout_marginBottom="400dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent">
-
-        <ImageView
-            android:src="@mipmap/icon_room_mic"
-            android:layout_width="200dp"
-            android:layout_height="200dp"
-            android:layout_gravity="center_horizontal"/>
-
-        <TextView
-            android:text="点击开始对话"
-            android:textColor="#455163"
-            android:textSize="38sp"
-            android:textStyle="bold"
-            android:elevation="8dp"
-            android:layout_marginTop="20dp"
-            android:layout_gravity="center_horizontal"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-    </LinearLayout>
-
-   <!-- ASR识别框 -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:visibility="gone"
-        android:id="@+id/cl_room_audio"
+        android:id="@+id/layout_top"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="80dp"
-        android:layout_marginRight="80dp"
-        android:layout_marginTop="600dp"
-        android:layout_marginBottom="100dp"
-        android:layout_gravity="center"
-        android:background="@drawable/bg_gradient_top_white_alpha"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <!-- 建流模式显示 -->
         <TextView
-            android:id="@+id/tv_audio_record_content"
-            android:layout_width="match_parent"
+            android:id="@+id/tv_mode"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minLines="2"
-            android:gravity="bottom"
-            android:layout_marginTop="60dp"
-            android:layout_marginBottom="40dp"
-            android:layout_marginLeft="60dp"
-            android:layout_marginRight="60dp"
-            android:textColor="#0B0B0B"
-            android:textSize="40sp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/wv_audio_record"/>
+            android:background="#80000000"
+            android:padding="8dp"
+            android:text="未建流"
+            android:textColor="#00FF00"
+            android:textSize="14sp" />
 
-        <com.tencent.virtualman_demo_app.view.LineWaveVoiceView
-            android:id="@+id/wv_audio_record"
-            android:layout_width="match_parent"
-            android:layout_height="240dp"
-            android:layout_marginLeft="36dp"
-            android:layout_marginTop="60dp"
-            android:layout_marginRight="36dp"
-            android:layout_marginBottom="120dp"
-            app:voiceLineWidth="10dp"
-            app:imageWidth="260dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tv_audio_record_content" />
+        <!-- 状态栏 -->
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="#80000000"
+            android:padding="8dp"
+            android:text="请选择建流方式"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
 
-        <ImageButton
-            android:layout_width="200dp"
-            android:layout_height="200dp"
-            android:background="@mipmap/icon_room_mic"
-            app:layout_constraintBottom_toBottomOf="@id/wv_audio_record"
-            app:layout_constraintLeft_toLeftOf="@id/wv_audio_record"
-            app:layout_constraintRight_toRightOf="@id/wv_audio_record"
-            app:layout_constraintTop_toTopOf="@id/wv_audio_record" />
+    </LinearLayout>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+    <!-- 顶部按钮区域 -->
+    <LinearLayout
+        android:id="@+id/layout_buttons"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/layout_top">
 
+        <!-- 项目建流按钮 -->
+        <Button
+            android:id="@+id/btn_project_stream"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:text="项目建流"
+            android:textSize="12sp" />
+
+        <!-- 资产建流按钮 -->
+        <Button
+            android:id="@+id/btn_asset_stream"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:text="资产建流"
+            android:textSize="12sp" />
+
+        <!-- 关流按钮 -->
+        <Button
+            android:id="@+id/btn_close_stream"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="关流"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+    <!-- 切换大小按钮 -->
+    <Button
+        android:id="@+id/btn_toggle_size"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp"
+        android:text="切换小窗"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/layout_buttons" />
+
+    <!-- 循环次数输入区域 -->
+    <LinearLayout
+        android:id="@+id/layout_loop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toTopOf="@id/et_input"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="循环次数："
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/et_loop_count"
+            android:layout_width="60dp"
+            android:layout_height="40dp"
+            android:background="#FFFFFF"
+            android:gravity="center"
+            android:inputType="number"
+            android:text="1"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_loop_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text=""
+            android:textColor="#0000FF"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+    <!-- 文本输入框（三行高度） -->
+    <EditText
+        android:id="@+id/et_input"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:background="#FFFFFF"
+        android:hint="输入文字..."
+        android:padding="12dp"
+        android:textSize="14sp"
+        android:minLines="3"
+        android:maxLines="3"
+        android:gravity="top|start"
+        android:text="@string/default_input_text"
+        app:layout_constraintBottom_toTopOf="@id/layout_input_row1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- 底部按钮区域第一行：音频文件驱动 + 语音驱动 -->
+    <LinearLayout
+        android:id="@+id/layout_input_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toTopOf="@id/layout_input">
+
+        <!-- 音频文件驱动按钮 -->
+        <Button
+            android:id="@+id/btn_audio_file"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="音频文件驱动"
+            android:textSize="14sp" />
+
+        <!-- 语音驱动按钮 -->
+        <Button
+            android:id="@+id/btn_record"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="语音驱动"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+    <!-- 底部按钮区域第二行：文本发送 + 流式发送 + 打断 -->
+    <LinearLayout
+        android:id="@+id/layout_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- 文本发送按钮 -->
+        <Button
+            android:id="@+id/btn_send"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="文本发送"
+            android:textSize="14sp" />
+
+        <!-- 流式文本发送按钮 -->
+        <Button
+            android:id="@+id/btn_stream_send"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="流式发送"
+            android:textSize="14sp" />
+
+        <!-- 打断按钮 -->
+        <Button
+            android:id="@+id/btn_interrupt"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="打断"
+            android:textSize="14sp" />
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

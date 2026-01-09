@@ -1,126 +1,134 @@
 package com.tencent.virtualman_demo_app
 
 import android.Manifest
-import android.annotation.SuppressLint
-import android.app.Dialog
-import android.content.Context
-import android.content.DialogInterface
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
-import android.net.Network
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Base64
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.LinearLayout
+import android.widget.Button
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.appcompat.app.AlertDialog
-import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.DialogFragment
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import cn.jzvd.Jzvd
 import com.google.gson.Gson
-import com.tencent.aai.AAIClient
-import com.tencent.aai.audio.data.AudioRecordDataSource
-import com.tencent.aai.auth.LocalCredentialProvider
-import com.tencent.aai.exception.ClientException
-import com.tencent.aai.exception.ServerException
-import com.tencent.aai.listener.AudioRecognizeResultListener
-import com.tencent.aai.listener.AudioRecognizeStateListener
-import com.tencent.aai.model.AudioRecognizeConfiguration
-import com.tencent.aai.model.AudioRecognizeRequest
-import com.tencent.aai.model.AudioRecognizeResult
+import com.tencent.trtc.TRTCCloud
+import com.tencent.trtc.TRTCCloudDef
+import com.tencent.trtc.TRTCCloudDef.TRTCAudioFrame
+import com.tencent.trtc.TRTCCloudListener
+import com.tencent.trtc.TRTCStatistics
+import com.tencent.virtualman.TRTCListener
 import com.tencent.virtualman.Virtualman
 import com.tencent.virtualman.VirtualmanParams
 import com.tencent.virtualman.data.ResponseData
+import com.tencent.virtualman.data.SendAudioParams
+import com.tencent.virtualman.data.AssetVirtualmanParams
+import com.tencent.virtualman.data.ExtraInfo
+import com.tencent.virtualman.data.ProtocolOption
+import com.tencent.virtualman.data.SendStreamTextParams
+import com.tencent.virtualman.data.SendTextParams
+import com.tencent.virtualman.data.VirtualmanProjectParams
 import com.tencent.virtualman.net.WsListener
-import com.tencent.virtualman_demo_app.bean.RoomBean
-import com.tencent.virtualman_demo_app.data.AsrResponseData
-import com.tencent.virtualman_demo_app.ui.adapter.RoomAdapter
-import com.tencent.virtualman_demo_app.view.LineWaveVoiceView
-import com.tencent.virtualman_demo_app.view.PagerSnapScrollView
-import com.tencent.virtualman_demo_app.view.dialog.PreviewImageDialog
-import com.tencent.virtualman_demo_app.view.dialog.PreviewPopupDialog
-import com.tencent.virtualman_demo_app.view.dialog.PreviewVideoDialog
-import com.tencent.virtualman_demo_app.view.dialog.SingleChoiceDialog
+import com.tencent.virtualman.utils.CommonUtils.genTrtcPrivateMapKey
+import com.tencent.virtualman.utils.CommonUtils.genTrtcUserSig
 import okhttp3.Response
 import okhttp3.WebSocket
-import org.json.JSONObject
-import java.util.ArrayList
-import java.util.Locale
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.UUID
 
-class MainActivity : AppCompatActivity(), View.OnClickListener {
-    private val TAG = "demoMain"
+class MainActivity : AppCompatActivity() {
+    private val TAG = "demo_index"
     private lateinit var mVirtualman: Virtualman
     private var mVirtualmanParams = VirtualmanParams()
-    private var aaiClient: AAIClient? = null
 
-    private var isUninterrupt = false
-    private var uninterruptId = ""
-    private var speakStatus = 0
-    private var isPauseRecord = false
+    // UI
+    private lateinit var btnRecord: Button
+    private lateinit var btnAudioFile: Button
+    private lateinit var btnSend: Button
+    private lateinit var btnStreamSend: Button
+    private lateinit var btnInterrupt: Button
+    private lateinit var btnProjectStream: Button
+    private lateinit var btnAssetStream: Button
+    private lateinit var btnCloseStream: Button
+    private lateinit var btnToggleSize: Button
+    private lateinit var etInput: EditText
+    private lateinit var tvStatus: TextView
+    private lateinit var tvMode: TextView
+    private lateinit var etLoopCount: EditText
+    private lateinit var tvLoopStatus: TextView
+    private lateinit var containerBig: FrameLayout
+    private lateinit var containerSmall: FrameLayout
+    
+    // 循环测试相关
+    private var isLoopTesting = false
+    private var loopTotalCount = 1
+    private var loopCurrentCount = 0
+    private var loopTestText = ""
+    private var loopTestType = LoopTestType.TEXT  // 循环测试类型
+    
+    // 循环测试类型枚举
+    enum class LoopTestType {
+        TEXT,           // 文本发送
+        STREAM_TEXT,    // 流式文本发送
+        AUDIO_FILE      // 音频文件驱动
+    }
 
-    private lateinit var start_talk_btn: LinearLayout
-    private lateinit var start_talk_btn_mask: LinearLayout
-    private lateinit var tv_audio_record_content: TextView
-    private lateinit var wv_audio_record: LineWaveVoiceView
-    private lateinit var cl_room_audio: ConstraintLayout
-    private lateinit var rvRoom: RecyclerView
-    private lateinit var roomAdapter: RoomAdapter
-    private lateinit var pssv_room_ask: PagerSnapScrollView
-    private lateinit var tv_room_item_text: TextView
+    // 是否已建流
+    private var isStreamInitialized = false
+    
+    // 是否在小窗模式
+    private var isSmallMode = false
+    
+    // 是否已收到 WaitingTextStart（用于打断逻辑判断）
+    private var hasReceivedWaitingTextStart = false
 
-    private var singleChoiceDialog: SingleChoiceDialog?= null
-    private var previewImageDialog: PreviewImageDialog?= null
-    private var previewVideoDialog: PreviewVideoDialog?= null
-    private var previewPopupDialog: PreviewPopupDialog?= null
+    // TRTC 音频驱动相关
+    private var isRecording = false
+    private var audioRecordReqId = ""
+    private var audioRecordSeq = 1
+    private val audioBuffer = mutableListOf<ByteArray>()  // 音频缓冲区，累积 8 帧（160ms）再发送
 
-    @SuppressLint("NewApi")
-    @RequiresApi(Build.VERSION_CODES.M)
+    private var trtcCloud: TRTCCloud? = null
+
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         initImmersionBar()
-
-        val connectivityManager = getSystemService(ConnectivityManager::class.java)
-        val currentNetwork = connectivityManager.activeNetwork
-
-        if (currentNetwork == null) {
-            val dialog = NetworkErrorDialog()
-            val fragmentManager = supportFragmentManager
-            dialog.show(supportFragmentManager, "NoticeDialogFragment")
+        
+        // 检查权限
+        if (allPermissionsGranted()) {
+            init()
         } else {
-            if (allPermissionsGranted()) {
-                init()
-            } else {
-                ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
-            }
+            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
-
-        connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-            override fun onLost(network : Network) {
-                val dialog = NetworkErrorDialog()
-                val fragmentManager = supportFragmentManager
-                dialog.show(supportFragmentManager, "NoticeDialogFragment")
-            }
-        })
+        trtcCloud = TRTCCloud.sharedInstance(applicationContext)
+        // 通过 addListener 添加 SEI 监听（演示外部直接使用 TRTC 实例）
+         trtcCloud?.addListener(object : TRTCCloudListener() {
+             override fun onRecvSEIMsg(userId: String?, data: ByteArray?) {
+                 if (data != null && data.size > 16) {
+                     val jsonData = String(data, 16, data.size - 16, Charsets.UTF_8)
+                     Log.i(TAG, "[addListener] 收到SEI消息: userId=$userId, data=$jsonData")
+                 }
+             }
+         })
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onDestroy() {
         super.onDestroy()
-        // 退出时调用数智人关流
-        mVirtualman.close()
-        Jzvd.releaseAllVideos()
-        //取消语音识别
-        releaseAudioRecognize()
+        if (isStreamInitialized) {
+            mVirtualman.close()
+        }
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
@@ -128,585 +136,726 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<String>, grantResults:
-        IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
                 init()
             } else {
-                showToast("Permissions not granted by the user.")
+                Toast.makeText(this, "需要录音权限", Toast.LENGTH_SHORT).show()
                 finish()
             }
         }
     }
 
-    private fun showToast(msg: String, context: Context = this, type: Int = Toast.LENGTH_SHORT) {
-        Toast.makeText(context, msg, type).show()
-    }
-
-    class NetworkErrorDialog : DialogFragment() {
-        override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-            return activity?.let {
-                val builder = AlertDialog.Builder(it)
-                builder.setMessage("网络不可用，请连接网络后重试")
-                    .setPositiveButton("退出",
-                        DialogInterface.OnClickListener { dialog, id ->
-                            activity?.finishAffinity();
-                        })
-                builder.create()
-            } ?: throw IllegalStateException("Activity cannot be null")
-        }
-    }
-
-
     @RequiresApi(Build.VERSION_CODES.O)
     private fun init() {
-        // 初始化ui相关
-        start_talk_btn = findViewById(R.id.start_talk_btn)
-        start_talk_btn_mask = findViewById(R.id.start_talk_btn_mask)
-        tv_audio_record_content = findViewById(R.id.tv_audio_record_content)
-        wv_audio_record = findViewById(R.id.wv_audio_record)
-        cl_room_audio = findViewById(R.id.cl_room_audio)
-        rvRoom = findViewById(R.id.rv_room)
-        pssv_room_ask = findViewById(R.id.pssv_room_ask)
-        tv_room_item_text = findViewById(R.id.tv_room_item_text)
+        // 初始化UI
+        btnRecord = findViewById(R.id.btn_record)
+        btnAudioFile = findViewById(R.id.btn_audio_file)
+        btnSend = findViewById(R.id.btn_send)
+        btnStreamSend = findViewById(R.id.btn_stream_send)
+        btnInterrupt = findViewById(R.id.btn_interrupt)
+        btnProjectStream = findViewById(R.id.btn_project_stream)
+        btnAssetStream = findViewById(R.id.btn_asset_stream)
+        btnCloseStream = findViewById(R.id.btn_close_stream)
+        btnToggleSize = findViewById(R.id.btn_toggle_size)
+        etInput = findViewById(R.id.et_input)
+        tvStatus = findViewById(R.id.tv_status)
+        tvMode = findViewById(R.id.tv_mode)
+        etLoopCount = findViewById(R.id.et_loop_count)
+        tvLoopStatus = findViewById(R.id.tv_loop_status)
+        containerBig = findViewById(R.id.container_big)
+        containerSmall = findViewById(R.id.container_small)
 
-        val layoutManager: LinearLayoutManager = object : LinearLayoutManager(this) {
-            override fun canScrollVertically(): Boolean {
-                return false
-            }
+        // 动态创建 Virtualman 并添加到大容器
+        mVirtualman = Virtualman(this)
+        containerBig.addView(mVirtualman, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        // 项目建流按钮
+        btnProjectStream.setOnClickListener {
+            initVirtualman(useAssetMode = false)
         }
-        rvRoom.layoutManager = layoutManager
-        roomAdapter = RoomAdapter()
-        rvRoom.adapter = roomAdapter
 
-        // 气泡点击事件
-        roomAdapter.setOnItemChildClickListener { _, view, position ->
-            val roomBean = roomAdapter.data[position]
-            if (roomBean.type == 2) {
-                // 点击图片类气泡
-                isPauseRecord = true
-                stopAudioRecognize()
-                previewImageDialog = PreviewImageDialog(roomBean.url)
-                previewImageDialog?.show(supportFragmentManager, PreviewImageDialog::class.java.simpleName)
-                previewImageDialog!!.setOnDismissListener {
-                    isPauseRecord = false
-                    startAudioRecognize()
-                }
-            } else if (roomBean.type == 3) {
-                // 点击视频类气泡
-                isPauseRecord = true
-                stopAudioRecognize()
-                previewVideoDialog = PreviewVideoDialog(roomBean.url)
-                previewVideoDialog?.show(supportFragmentManager, PreviewVideoDialog::class.java.simpleName)
-                previewVideoDialog!!.setOnDismissListener {
-                    isPauseRecord = false
-                    startAudioRecognize()
-                }
+        // 资产建流按钮
+        btnAssetStream.setOnClickListener {
+            initVirtualman(useAssetMode = true)
+        }
+
+        // 关流按钮
+        btnCloseStream.setOnClickListener {
+            mVirtualman.close()
+            isStreamInitialized = false
+            updateStatus("已关流")
+            tvMode.text = "未建流"
+        }
+
+        // 切换大小按钮
+        btnToggleSize.setOnClickListener {
+            toggleViewSize()
+        }
+
+        // 录音按钮 - 使用 TRTC 本地音频
+        btnRecord.setOnClickListener {
+            if (!isStreamInitialized) {
+                updateStatus("请先建流")
+                return@setOnClickListener
+            }
+            if (!isRecording) {
+                startTrtcRecording()
+                btnRecord.text = "停止录音"
             } else {
-                // 点击文本类气泡
-                pssv_room_ask.visibility = View.GONE
-                rvRoom.visibility = View.INVISIBLE
-                stopAudioRecognize()
+                stopTrtcRecording()
+                btnRecord.text = "语音驱动"
             }
         }
 
+        // 音频文件驱动按钮
+        btnAudioFile.setOnClickListener {
+            if (!isStreamInitialized) {
+                updateStatus("请先建流")
+                return@setOnClickListener
+            }
+            startLoopTest(LoopTestType.AUDIO_FILE, "")
+        }
+
+        // 发送文本按钮
+        btnSend.setOnClickListener {
+            if (!isStreamInitialized) {
+                updateStatus("请先建流")
+                return@setOnClickListener
+            }
+            val text = etInput.text.toString().trim()
+            if (text.isEmpty()) {
+                updateStatus("请输入文本")
+                return@setOnClickListener
+            }
+            startLoopTest(LoopTestType.TEXT, text)
+        }
+
+        // 流式文本发送按钮
+        btnStreamSend.setOnClickListener {
+            if (!isStreamInitialized) {
+                updateStatus("请先建流")
+                return@setOnClickListener
+            }
+            val text = etInput.text.toString().trim()
+            if (text.isEmpty()) {
+                updateStatus("请输入文本")
+                return@setOnClickListener
+            }
+            startLoopTest(LoopTestType.STREAM_TEXT, text)
+        }
+
+        // 打断按钮
+        btnInterrupt.setOnClickListener {
+            if (!isStreamInitialized) {
+                updateStatus("请先建流")
+                return@setOnClickListener
+            }
+            // 停止循环测试
+            if (isLoopTesting) {
+                val wasAudioLoop = loopTestType == LoopTestType.AUDIO_FILE
+                stopLoopTest()
+                if (wasAudioLoop) {
+                    // 音频驱动无法通过 stop() 打断，只停止循环
+                    updateStatus("已停止循环")
+                    return@setOnClickListener
+                }
+            }
+            val result = mVirtualman.stop()
+            if (result == true) {
+                updateStatus("已打断")
+            } else {
+                updateStatus("打断失败")
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun initVirtualman(useAssetMode: Boolean) {
         // 初始化数智人
-        mVirtualman = findViewById(R.id.virtualman)
+        mVirtualmanParams = VirtualmanParams()
         mVirtualmanParams.appkey = Config.APP_KEY
         mVirtualmanParams.accesstoken = Config.ACCESS_TOKEN
-        mVirtualmanParams.virtualmanProjectId = Config.VIRTUALMAN_PROJECT_ID
+        mVirtualmanParams.infoVisible = true
+
+        if (useAssetMode) {
+            // 方式1: 使用 AssetVirtualmanKey 建流
+            mVirtualmanParams.assetVirtualmanParams = AssetVirtualmanParams().apply {
+                assetVirtualmanKey = Config.ASSET_VIRTUALMAN_KEY
+                extraInfo = ExtraInfo().apply {
+                    alphaChannelEnable = true
+                }
+                userId = "test001"
+            }
+            tvMode.text = "模式: 资产建流"
+        } else {
+            // 方式2: 使用 VirtualmanProjectId 建流
+            mVirtualmanParams.virtualmanProjectParams = VirtualmanProjectParams().apply {
+                virtualmanProjectId = Config.VIRTUALMAN_PROJECT_ID
+                userId = "test001"
+                extraInfo = ExtraInfo().apply {
+                    alphaChannelEnable = true
+                }
+            }
+            tvMode.text = "模式: 项目建流"
+        }
+
+        updateStatus("正在初始化...")
+        
         mVirtualman.init(mVirtualmanParams, { result ->
-            Log.i(TAG, "---------------------------------------------------")
-            Log.i(TAG, result.toString())
-            if (result.toString().startsWith("success")) {
-                // 显示开始对话按钮
-                start_talk_btn.postDelayed({
-                    start_talk_btn.visibility = View.VISIBLE
-                    start_talk_btn_mask.visibility = View.VISIBLE
-                }, 5000)
+            Log.i(TAG, "init result: $result")
+            runOnUiThread {
+                if (result.toString().startsWith("success")) {
+                    isStreamInitialized = true
+                    updateStatus("初始化成功，可以开始对话")
+                } else {
+                    isStreamInitialized = false
+                    updateStatus("初始化失败: $result")
+                }
             }
         }, StreamWebSocketListener())
 
-        // 开始对话按钮事件
-        start_talk_btn.setOnClickListener(this)
+        // 设置TRTC监听器，接收SEI消息和网络状态
+        mVirtualman.setTRTCListener(object : TRTCListener {
+            override fun onRecvSEIMsg(userId: String?, data: ByteArray?) {
+                Log.i(TAG, "收到SEI消息: ${data?.size}")
+                // SEI数据：前16字节为uuid，第17字节开始为JSON格式的包体数据
+                if (data != null && data.size > 16) {
+                    val jsonData = String(data, 16, data.size - 16, Charsets.UTF_8)
+                    Log.i(TAG, "收到SEI消息: userId=$userId, data=$jsonData")
+                }
+            }
+            override fun onFirstVideoFrame(userId: String?, streamType: Int, width: Int, height: Int) {
+                Log.i(TAG, "收到首帧视频: userId=$userId, streamType=$streamType, width=$width, height=$height")
+            }
+            override fun onError(errCode: Int, errMsg: String?, extraInfo: Bundle?) {
+                Log.e(TAG, "TRTC错误: code=$errCode, msg=$errMsg")
+            }
+            override fun onConnectionLost() {
+                Log.w(TAG, "TRTC连接断开")
+                runOnUiThread {
+                    updateStatus("网络连接断开，正在重连...")
+                }
+            }
+            override fun onTryToReconnect() {
+                Log.i(TAG, "TRTC正在重连...")
+            }
+            override fun onConnectionRecovery() {
+                Log.i(TAG, "TRTC连接已恢复")
+                runOnUiThread {
+                    updateStatus("网络连接已恢复")
+                }
+            }
+            override fun onNetworkQuality(localQuality: TRTCCloudDef.TRTCQuality, remoteQuality: ArrayList<TRTCCloudDef.TRTCQuality>?) {
+                // 网络质量: 0-未知, 1-极好, 2-好, 3-一般, 4-差, 5-极差, 6-断开
+                val qualityDesc = when (localQuality.quality) {
+                    0 -> "未知"
+                    1 -> "极好"
+                    2 -> "好"
+                    3 -> "一般"
+                    4 -> "差"
+                    5 -> "极差"
+                    6 -> "断开"
+                    else -> "未知(${localQuality.quality})"
+                }
+//                Log.d(TAG, "网络质量: 本地=$qualityDesc, 远端数量=${remoteQuality?.size ?: 0}")
+            }
+            override fun onStatistics(statistics: TRTCStatistics?) {
+                statistics?.let {
+//                    Log.d(TAG, "统计: 上行丢包=${it.upLoss}%, 下行丢包=${it.downLoss}%, RTT=${it.rtt}ms")
+                }
+            }
+        })
     }
 
-    override fun onClick(p0: View?) {
-        when(p0?.id){
-            R.id.start_talk_btn -> {
-                if (aaiClient == null){
-                    initAudioRecognize()
-                }else {
-                    startAudioRecognize()
+    private fun updateStatus(status: String) {
+        tvStatus.text = status
+    }
+    
+    // 开始循环测试
+    private fun startLoopTest(type: LoopTestType, text: String) {
+        val loopCount = etLoopCount.text.toString().toIntOrNull() ?: 1
+        
+        isLoopTesting = true
+        loopTotalCount = loopCount  // 0 表示无限循环
+        loopCurrentCount = 0
+        loopTestText = text
+        loopTestType = type
+        
+        // 执行第一次
+        executeLoopOnce()
+    }
+    
+    // 执行一次循环
+    private fun executeLoopOnce() {
+        loopCurrentCount++
+        hasReceivedWaitingTextStart = false
+        updateLoopStatus()
+        
+        val typeName = when (loopTestType) {
+            LoopTestType.TEXT -> "文本"
+            LoopTestType.STREAM_TEXT -> "流式文本"
+            LoopTestType.AUDIO_FILE -> "音频文件"
+        }
+        val progressText = if (loopTotalCount == 0) "$loopCurrentCount/∞" else "$loopCurrentCount/$loopTotalCount"
+        
+        when (loopTestType) {
+            LoopTestType.TEXT -> {
+                val textParams = SendTextParams(
+                    loopTestText,
+                    videoSeiInfo = "{\"TextSEI\":\"Hello~ apple\"}"
+                )
+                val result = mVirtualman.sendText(textParams)
+                if (result == true) {
+                    updateStatus("[$typeName] 循环 $progressText 发送成功，等待响应...")
+                } else {
+                    updateStatus("[$typeName] 循环 $progressText 发送失败")
+                    stopLoopTest()
                 }
+            }
+            LoopTestType.STREAM_TEXT -> {
+                sendTextInChunksForLoop()
+            }
+            LoopTestType.AUDIO_FILE -> {
+                sendAudioFileForLoop()
             }
         }
     }
-
-    // 初始化ASR client对象
-    private fun initAudioRecognize() {
+    
+    // 流式文本发送（循环版本）
+    private fun sendTextInChunksForLoop() {
+        val typeName = "流式文本"
+        val progressText = if (loopTotalCount == 0) "$loopCurrentCount/∞" else "$loopCurrentCount/$loopTotalCount"
+        val chunkSize = 10
+        val reqId = UUID.randomUUID().toString().replace("-", "")
+        val chunks = loopTestText.chunked(chunkSize)
+        
         Thread {
-            aaiClient = AAIClient(
-                this,
-                Config.ASR_APP_ID,
-                0,
-                Config.ASR_SECRET_ID,
-                Config.ASR_SECRET_KEY,
-                LocalCredentialProvider(Config.ASR_SECRET_KEY)
-            )
-            startAudioRecognize()
+            var allSuccess = true
+            chunks.forEachIndexed { index, chunk ->
+                val isLast = index == chunks.size - 1
+                val seq = index + 1
+                val params = SendStreamTextParams(
+                    reqId = reqId,
+                    text = chunk,
+                    seq = seq,
+                    isFinal = isLast,
+                    videoSeiInfo = if (seq == 1) "{\"StreamTextSEI\":\"Hello~ apple\"}" else null
+                )
+                val result = mVirtualman.sendStreamText(params)
+                if (result != true) {
+                    allSuccess = false
+                    Log.w(TAG, "流式发送失败 seq=${index + 1}")
+                }
+                if (!isLast) {
+                    Thread.sleep(100)
+                }
+            }
+            runOnUiThread {
+                if (allSuccess) {
+                    updateStatus("[$typeName] 循环 $progressText 发送成功，等待响应...")
+                } else {
+                    updateStatus("[$typeName] 循环 $progressText 发送失败")
+                    stopLoopTest()
+                }
+            }
         }.start()
     }
+    
+    // 音频文件发送（循环版本）
+    private fun sendAudioFileForLoop() {
+        val typeName = "音频文件"
+        val progressText = if (loopTotalCount == 0) "$loopCurrentCount/∞" else "$loopCurrentCount/$loopTotalCount"
+        Thread {
+            try {
+                val inputStream = assets.open("audio_test_01.pcm")
+                val pcmData = inputStream.readBytes()
+                inputStream.close()
 
-    // 开始ASR语音识别
-    private fun startAudioRecognize(){
-        if (aaiClient != null){
-            Thread {
-                aaiClient?.startAudioRecognize(
-                    audioRecognizeRequest,
-                    audioRecognizeResultlistener,
-                    audioRecognizeStateListener,
-                    audioRecognizeConfiguration
-                )
-            }.start()
-            speakStatus = 1
-        }
-    }
+                val chunkSize = 5120
+                val reqId = UUID.randomUUID().toString().replace("-", "")
+                val totalChunks = (pcmData.size + chunkSize - 1) / chunkSize
+                var seq = 1
 
-    // 停止ASR语音识别
-    private fun stopAudioRecognize(){
-        if (aaiClient != null){
-            Thread {
-                //停止语音识别，等待最终识别结果
-                aaiClient?.stopAudioRecognize()
-            }.start()
-            speakStatus = 0
-        }
-    }
-
-    // 取消ASR语音识别
-    private fun releaseAudioRecognize(){
-        if (aaiClient != null){
-            Thread {
-                //取消语音识别，丢弃当前任务，丢弃最终结果
-                aaiClient?.cancelAudioRecognize()
-                aaiClient?.release()
-                aaiClient = null
-            }.start()
-            speakStatus = 0
-        }
-    }
-
-    // 初始化ASR语音识别请求
-    private val audioRecognizeRequest: AudioRecognizeRequest =
-        AudioRecognizeRequest.Builder() //设置数据源，数据源要求实现PcmAudioDataSource接口，您可以自己实现此接口来定制您的自定义数据源，例如从第三方推流中获
-            .pcmAudioDataSource(AudioRecordDataSource(false)) // 使用SDK内置录音器作为数据源,false:不保存音频?
-            .setEngineModelType("16k_zh") // 设置引擎参数("16k_zh" 通用引擎，支持中文普通话+英文)
-            .setFilterDirty(0) // 0 ：默认状态 不过滤脏话 1：过滤脏话
-            .setFilterModal(0) // 0 ：默认状态 不过滤语气词  1：过滤部分语气词 2:严格过滤
-            .setFilterPunc(0) // 0 ：默认状态 不过滤句末的句号 1：滤句末的句号
-            .setConvert_num_mode(1) //1：默认状态 根据场景智能转换为阿拉伯数字；0：全部转为中文数字。
-            .setNeedvad(1) //0：关闭 vad，1：默认状态 开启 vad。语音时长超过一分钟需要开启,如果对实时性要求较高,并且时间较短的输入,建议关闭
-            .setReinforceHotword(1)
-            .build()
-
-
-    // 初始化ASR语音识别结果监听器
-    private val audioRecognizeResultlistener: AudioRecognizeResultListener =
-        object : AudioRecognizeResultListener {
-            // ASR返回分片的识别结果，此为中间态结果，会被持续修正
-            override fun onSliceSuccess(
-                request: AudioRecognizeRequest,
-                result: AudioRecognizeResult,
-                seq: Int
-            ) {
-                if (isDestroyed) return
-                Log.i(TAG, "onSliceSuccess seq=$seq result=${result.text} startTime=${result.startTime} endTime=${result.endTime}")
-                if (result.text.isNotEmpty()) {
-
-                    if (!isUninterrupt) {
-                        runOnUiThread {
-                            if (cl_room_audio.visibility != View.VISIBLE) {
-                                cl_room_audio.visibility = View.VISIBLE
-                            }
-                            tv_audio_record_content.setText(result.text)
-                            rvRoom.visibility = View.INVISIBLE
-                            pssv_room_ask.visibility = View.GONE
-
-                            previewImageDialog?.dismiss()
-                            previewVideoDialog?.dismiss()
-                            singleChoiceDialog?.dismiss()
-                            if (Jzvd.CURRENT_JZVD != null && Jzvd.CURRENT_JZVD.state == Jzvd.STATE_PLAYING) {
-                                Jzvd.goOnPlayOnPause()
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ASR返回语音流的识别结果，此为稳定态结果，可做为识别结果用与业务
-            override fun onSegmentSuccess(
-                request: AudioRecognizeRequest,
-                result: AudioRecognizeResult,
-                seq: Int
-            ) {
-                Log.i(TAG, "onSegmentSuccess seq=$seq result=${result.text} startTime=${result.startTime} endTime=${result.endTime}")
-
-                if (result.text.isNotEmpty()) {
-                    if (!isUninterrupt) {
-                        val isSuccess = mVirtualman.sendText(result.text)
-
-                        tv_audio_record_content.post {
-                            tv_audio_record_content.text = ""
-                        }
-
-                        if (isSuccess == true) {
-                            runOnUiThread {
-                                roomAdapter.setNewData(ArrayList<RoomBean>())
-                                tv_room_item_text.text = result.text
-                                pssv_room_ask.visibility = View.VISIBLE
-                            }
-                        }
-                    }
-                }
                 runOnUiThread {
-                    cl_room_audio.visibility = View.GONE
+                    updateStatus("[$typeName] 循环 $progressText 驱动中... 共${totalChunks}个分片")
                 }
-            }
 
-            //识别结束回调，返回所有的识别结果
-            override fun onSuccess(request: AudioRecognizeRequest, result: String) {
-                Log.i(TAG, "onSuccess result=${result} vad_silence_time=${request.vad_silence_time}")
-            }
+                var offset = 0
+                while (offset < pcmData.size) {
+                    val remaining = pcmData.size - offset
+                    val currentChunkSize = minOf(chunkSize, remaining)
+                    val chunk = pcmData.copyOfRange(offset, offset + currentChunkSize)
+                    val isLast = offset + currentChunkSize >= pcmData.size
 
-            // 识别失败
-            override fun onFailure(
-                request: AudioRecognizeRequest?,
-                clientException: ClientException?,
-                serverException: ServerException?,
-                response: String?
-            ) {
-                Log.e(TAG, "ASR error onFailure $response")
-                Log.e(TAG, "ASR error clientException ${clientException.toString()}")
-                Log.e(TAG, "ASR error serverException ${serverException.toString()}")
-                val rdata = Gson().fromJson(response, AsrResponseData::class.java)
-                val message = rdata?.message
-                if (message != null && message.isNotEmpty()) {
-                    Thread.sleep(500)
-                    singleChoiceDialog?.dismiss()
-                    previewImageDialog?.dismiss()
-                    previewVideoDialog?.dismiss()
-                    previewPopupDialog?.dismiss()
-                    previewPopupDialog = PreviewPopupDialog("ASR错误","$message", "确认")
-                    previewPopupDialog?.show(supportFragmentManager, PreviewImageDialog::class.java.simpleName)
-                }
-            }
-        }
+                    val base64String = Base64.encodeToString(chunk, Base64.NO_WRAP)
+                    val currentSeq = seq
+                    val result = mVirtualman.sendAudio(SendAudioParams(
+                        reqId = reqId,
+                        audio = base64String,
+                        seq = currentSeq,
+                        isFinal = isLast,
+                        videoSeiInfo = if (currentSeq == 1) "{\"AudioFileSEI\":\"Hello~ apple\"}" else null
+                    ))
 
-    // 初始化ASR语音识别状态监听器
-    private val audioRecognizeStateListener = object : AudioRecognizeStateListener {
-        override fun onStartRecord(request: AudioRecognizeRequest?) {
-            // 开始录音
-            Log.i(TAG, "onStartRecord")
-            speakStatus = 1
-            runOnUiThread {
-                tv_audio_record_content.text = ""
-                start_talk_btn.visibility = View.GONE
-                start_talk_btn_mask.visibility = View.GONE
-            }
-        }
+                    if (result != true) {
+                        Log.w(TAG, "音频文件发送失败 seq=$currentSeq")
+                    } else {
+                        Log.d(TAG, "音频文件发送成功 seq=$currentSeq, size=$currentChunkSize, isLast=$isLast")
+                    }
 
-        override fun onStopRecord(request: AudioRecognizeRequest?) {
-            // 结束录音
-            Log.e(TAG, "onStopRecord")
-            speakStatus = 0
-            if (!isPauseRecord){
-                start_talk_btn.post {
-                    start_talk_btn.visibility = View.VISIBLE
-                    start_talk_btn_mask.visibility = View.VISIBLE
-                }
-            }
-        }
+                    seq++
+                    offset += currentChunkSize
 
-        private var volumeSize: Int = 0
-        private var volumeResultSize: Int = 0
-        private var volumeMaxResultSize: Int = 0
-        override fun onVoiceVolume(request: AudioRecognizeRequest?, volume: Int) {
-            // 音量回调
-            wv_audio_record.post {
-                wv_audio_record.addWaveList(volume)
-            }
-            if (volume == 0) {
-                volumeSize++
-                volumeMaxResultSize = 0
-                if (volumeSize > 15){
-                    runOnUiThread {
-                        cl_room_audio.visibility = View.GONE
+                    if (!isLast) {
+                        Thread.sleep(140)
                     }
                 }
-            } else {
-                runOnUiThread {
-                    if (volume < 5) {
-                        volumeResultSize++
-                        volumeMaxResultSize = 0
-                        if (volumeResultSize > 35){
-                            volumeResultSize = 0
-                            cl_room_audio.visibility = View.GONE
-                        }
-                    }else {
-                        volumeResultSize = 0
 
-                        if (volume > 15){
-                            volumeMaxResultSize++
-                            if (!isUninterrupt && volumeMaxResultSize > 5) {
-                                if (cl_room_audio.visibility != View.VISIBLE) {
-                                    cl_room_audio.visibility = View.VISIBLE
+                runOnUiThread {
+                    updateStatus("[$typeName] 循环 $progressText 发送完成，等待响应...")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "音频文件驱动失败", e)
+                runOnUiThread {
+                    updateStatus("[$typeName] 循环 $progressText 驱动失败: ${e.message}")
+                    stopLoopTest()
+                }
+            }
+        }.start()
+    }
+    
+    // 更新循环状态显示
+    private fun updateLoopStatus() {
+        if (isLoopTesting) {
+            val typeName = when (loopTestType) {
+                LoopTestType.TEXT -> "文本"
+                LoopTestType.STREAM_TEXT -> "流式"
+                LoopTestType.AUDIO_FILE -> "音频"
+            }
+            val progressText = if (loopTotalCount == 0) "$loopCurrentCount/∞" else "$loopCurrentCount/$loopTotalCount"
+            tvLoopStatus.text = "[$typeName] $progressText"
+        } else {
+            tvLoopStatus.text = ""
+        }
+    }
+    
+    // 停止循环测试
+    private fun stopLoopTest() {
+        isLoopTesting = false
+        loopCurrentCount = 0
+        updateLoopStatus()
+    }
+
+    // 切换 View 大小：在大容器和小容器之间移动
+    private fun toggleViewSize() {
+        if (!isStreamInitialized) {
+            updateStatus("请先建流")
+            return
+        }
+
+        // 从当前容器移除
+        (mVirtualman.parent as? ViewGroup)?.removeView(mVirtualman)
+
+        if (isSmallMode) {
+            // 切换到大窗
+            containerSmall.visibility = View.GONE
+            containerBig.addView(mVirtualman, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ))
+            btnToggleSize.text = "切换小窗"
+            updateStatus("已切换到大窗模式")
+        } else {
+            // 切换到小窗
+            containerSmall.visibility = View.VISIBLE
+            containerSmall.addView(mVirtualman, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ))
+            btnToggleSize.text = "切换大窗"
+            updateStatus("已切换到小窗模式")
+        }
+        isSmallMode = !isSmallMode
+    }
+
+    // 开始 TRTC 录音
+    private fun startTrtcRecording() {
+        val cloud = trtcCloud ?: return
+        
+        isRecording = true
+        audioRecordReqId = UUID.randomUUID().toString().replace("-", "")
+        audioRecordSeq = 1
+        audioBuffer.clear()  // 清空缓冲区
+        updateStatus("正在录音...")
+        
+        // 设置音频帧回调格式：16kHz, 单声道, 20ms一帧(320采样点)
+        val format = TRTCCloudDef.TRTCAudioFrameCallbackFormat()
+        format.sampleRate = 16000
+        format.channel = 1
+        format.samplesPerCall = 320  // 20ms 一帧
+        cloud.setLocalProcessedAudioFrameCallbackFormat(format)
+        
+        // 设置音频帧回调
+        cloud.setAudioFrameListener(object : TRTCCloudListener.TRTCAudioFrameListener {
+            override fun onCapturedAudioFrame(frame: TRTCAudioFrame?) {
+                // 不处理原始采集帧
+            }
+
+            override fun onLocalProcessedAudioFrame(frame: TRTCAudioFrame?) {
+                // 处理本地处理后的音频帧
+                if (frame?.data != null && isRecording) {
+                    val pcmData = frame.data.copyOf()  // 拷贝数据，避免被覆盖
+                    
+                    synchronized(audioBuffer) {
+                        audioBuffer.add(pcmData)
+                        
+                        // 累积 8 帧（160ms）再发送
+                        if (audioBuffer.size >= 8) {
+                            // 合并 8 帧数据
+                            val totalSize = audioBuffer.sumOf { it.size }
+                            val mergedData = ByteArray(totalSize)
+                            var offset = 0
+                            for (chunk in audioBuffer) {
+                                System.arraycopy(chunk, 0, mergedData, offset, chunk.size)
+                                offset += chunk.size
+                            }
+                            audioBuffer.clear()
+                            
+                            val seq = audioRecordSeq++
+                            val reqId = audioRecordReqId
+                            // 异步发送，避免阻塞音频回调
+                            Thread {
+                                val base64String = Base64.encodeToString(mergedData, Base64.NO_WRAP)
+                                val result = mVirtualman.sendAudio(SendAudioParams(
+                                    reqId = reqId,
+                                    audio = base64String,
+                                    seq = seq,
+                                    isFinal = false,
+                                    // 只在第一个分片发送 SEI
+                                    videoSeiInfo = if (seq == 1) "{\"AudioSEI\":\"Hello~ apple\"}" else null
+                                ))
+                                if (result != true) {
+                                    Log.w(TAG, "音频发送失败 seq=$seq")
                                 }
-                            }
-                        }else {
-                            volumeMaxResultSize = 0
+                            }.start()
                         }
                     }
                 }
-                volumeSize = 0
             }
-        }
 
-        /**
-         * 返回音频流，
-         * 用于返回宿主层做录音缓存业务。
-         * 由于方法跑在sdk线程上，这里多用于文件操作，宿主需要新开一条线程专门用于实现业务逻辑
-         * new AudioRecordDataSource(true) 有效，否则不会回调该函数
-         * @param audioDatas
-         */
-        override fun onNextAudioData(audioDatas: ShortArray?, readBufferLength: Int) {
-            Log.i(TAG, "onNextAudioData $readBufferLength")
-        }
+            override fun onRemoteUserAudioFrame(frame: TRTCAudioFrame?, userId: String?) {
+                // 不处理远端用户音频帧
+            }
 
-        /**
-         * 静音检测超时回调
-         * 注意：此时任务还未中止，仍然会等待最终识别结果
-         */
-        override fun onSilentDetectTimeOut() {
-            //触发了静音检测事件
-            Log.i(TAG, "onSilentDetectTimeOut")
-        }
+            override fun onMixedPlayAudioFrame(frame: TRTCAudioFrame?) {
+                // 不处理混音播放帧
+            }
+
+            override fun onMixedAllAudioFrame(frame: TRTCAudioFrame?) {
+                // 不处理所有混音帧
+            }
+
+            override fun onVoiceEarMonitorAudioFrame(frame: TRTCAudioFrame?) {
+                // 不处理耳返帧
+            }
+        })
+        
+        // 开启本地音频采集
+        cloud.startLocalAudio(TRTCCloudDef.TRTC_AUDIO_QUALITY_SPEECH)
     }
 
-    // 自定义ASR识别配置
-    private val audioRecognizeConfiguration =
-        AudioRecognizeConfiguration.Builder()
-            .setSilentDetectTimeOut(false) // 静音检测超时停止录音可设置>2000ms，setSilentDetectTimeOut为true有效，超过指定时间没有说话将关闭识别；需要大于等于sliceTime，实际时间为sliceTime的倍数，如果小于sliceTime，则按sliceTime的时间为准
-            .setSilentDetectTimeOutAutoStop(true)
-            .audioFlowSilenceTimeOut(2000) // 音量回调时间，需要大于等于sliceTime，实际时间为sliceTime的倍数，如果小于sliceTime，则按sliceTime的时间为准
-            .minVolumeCallbackTime(80)
-            .build()
+    // 停止 TRTC 录音
+    private fun stopTrtcRecording() {
+        val cloud = trtcCloud ?: return
+        
+        isRecording = false
+        
+        // 发送缓冲区剩余的数据（如果有）
+        synchronized(audioBuffer) {
+            if (audioBuffer.isNotEmpty()) {
+                val totalSize = audioBuffer.sumOf { it.size }
+                val mergedData = ByteArray(totalSize)
+                var offset = 0
+                for (chunk in audioBuffer) {
+                    System.arraycopy(chunk, 0, mergedData, offset, chunk.size)
+                    offset += chunk.size
+                }
+                audioBuffer.clear()
+                
+                val seq = audioRecordSeq++
+                val base64String = Base64.encodeToString(mergedData, Base64.NO_WRAP)
+                mVirtualman.sendAudio(SendAudioParams(
+                    reqId = audioRecordReqId,
+                    audio = base64String,
+                    seq = seq,
+                    isFinal = false
+                ))
+            }
+        }
+        
+        // 发送结束标记
+        val result = mVirtualman.sendAudio(SendAudioParams(
+            reqId = audioRecordReqId,
+            audio = "",
+            seq = audioRecordSeq,
+            isFinal = true
+        ))
+        if (result == true) {
+            updateStatus("录音结束，等待响应...")
+        } else {
+            updateStatus("录音结束，发送结束标记失败")
+        }
+        
+        // 停止本地音频采集
+        cloud.stopLocalAudio()
+        
+        // 移除音频帧回调
+        cloud.setAudioFrameListener(null)
+    }
 
-    // 数智人socket监听事件
-    internal inner class StreamWebSocketListener: WsListener() {
+    // WebSocket 监听
+    inner class StreamWebSocketListener : WsListener() {
         override fun onMessage(webSocket: WebSocket, text: String) {
             super.onMessage(webSocket, text)
-            Log.i(TAG, "-----websocket-onMessage")
-            Log.i(TAG, text)
-
+//            Log.i(TAG, "WebSocket onMessage: $text")
             val rdata = Gson().fromJson(text, ResponseData::class.java)
-            // 打断状态逻辑处理
-            if (rdata.Payload?.Type == 2) {
-                isUninterrupt = rdata.Payload?.Uninterrupt == true
-
-                if (isUninterrupt) {
-                    uninterruptId = rdata.Payload?.ReqId!!
+            
+            // 优先检查错误码
+            val errorCode = rdata.Payload?.ErrorCode
+            val errorMsg = rdata.Payload?.ErrorMsg ?: rdata.Payload?.ErrorMessage
+            if (errorCode != null && errorCode != 0) {
+                Log.e(TAG, "业务错误: code=$errorCode, msg=$errorMsg, raw=$text")
+                runOnUiThread {
+                    updateStatus("错误: [$errorCode] $errorMsg")
                 }
-                if (isUninterrupt && cl_room_audio.visibility == View.VISIBLE){
-                    runOnUiThread {
-                        cl_room_audio.visibility = View.GONE
-                    }
-                }
-            } else if (rdata.Payload?.Type == 3) {
-                if ((rdata.Payload?.SpeakStatus == "TextOver" || rdata.Payload?.SpeakStatus == "Error")&& rdata.Payload?.ReqId == uninterruptId) {
-                    isUninterrupt = false
-                }
+                return
             }
-
-            // 内容消息处理
-            val interactionContent = rdata.Payload?.InteractionContent
-            if (interactionContent != null && interactionContent.isNotEmpty()){
-                val jsonObject = JSONObject(interactionContent)
-                val interactionType = rdata?.Payload?.InteractionType?.lowercase(
-                    Locale.ROOT
-                )
-                when (interactionType){
-                    "video" -> {
-                        // 视频
-                        val videoUrl = jsonObject.getString("url")
-                        if (videoUrl.isNotEmpty()){
-                            runOnUiThread {
-                                val roomBean = RoomBean(3, rdata.Payload?.Text, videoUrl)
-                                val list = ArrayList<RoomBean>()
-                                list.add(roomBean)
-                                roomAdapter.setNewData(list)
-                                rvRoom.visibility = View.VISIBLE
+            
+            when (rdata.Payload?.Type) {
+                // Type 3: 播报状态
+                3 -> {
+                    val speakStatus = rdata.Payload?.SpeakStatus
+                    Log.d(TAG, "speakStatus: $speakStatus")
+                    runOnUiThread {
+                        when (speakStatus) {
+                            "WaitingTextStart" -> {
+                                hasReceivedWaitingTextStart = true
+                                updateStatus("等待播报开始...")
                             }
-                        }
-                    }
-                    "image" -> {
-                        // 图片
-                        val imageUrl = jsonObject.getString("url")
-                        if (imageUrl.isNotEmpty()){
-                            runOnUiThread {
-                                val roomBean = RoomBean(2, rdata.Payload?.Text, imageUrl)
-                                val list = ArrayList<RoomBean>()
-                                list.add(roomBean)
-                                roomAdapter.setNewData(list)
-                                rvRoom.visibility = View.VISIBLE
+                            "TextOver", "AudioOver" -> {
+                                hasReceivedWaitingTextStart = false
+                                // 检查是否在循环测试中（loopTotalCount == 0 表示无限循环）
+                                val isInfiniteLoop = loopTotalCount == 0
+                                if (isLoopTesting && (isInfiniteLoop || loopCurrentCount < loopTotalCount)) {
+                                    val typeName = when (loopTestType) {
+                                        LoopTestType.TEXT -> "文本"
+                                        LoopTestType.STREAM_TEXT -> "流式文本"
+                                        LoopTestType.AUDIO_FILE -> "音频文件"
+                                    }
+                                    val progressText = if (isInfiniteLoop) "$loopCurrentCount/∞" else "$loopCurrentCount/$loopTotalCount"
+                                    updateStatus("[$typeName] 循环 $progressText 完成，开始下一次...")
+                                    // 延迟一点再发送下一次，避免太快
+                                    btnSend.postDelayed({
+                                        executeLoopOnce()
+                                    }, 500)
+                                } else if (isLoopTesting) {
+                                    // 循环测试完成
+                                    val typeName = when (loopTestType) {
+                                        LoopTestType.TEXT -> "文本"
+                                        LoopTestType.STREAM_TEXT -> "流式文本"
+                                        LoopTestType.AUDIO_FILE -> "音频文件"
+                                    }
+                                    updateStatus("[$typeName] 循环测试完成！共 $loopTotalCount 次")
+                                    stopLoopTest()
+                                } else {
+                                    updateStatus("播报完成，可以继续对话")
+                                }
                             }
-                        }
-                    }
-                    "optioninfo" -> {
-                        // 选择题
-                        val areas = jsonObject.getJSONArray("options")
-                        val style = jsonObject.getString("style")
-
-                        val options = ArrayList<String>()
-                        for (index in 0 until areas.length()) {
-                            if (areas.getString(index) != null) {
-                                options.add(areas.getString(index))
+                            "Error" -> {
+                                hasReceivedWaitingTextStart = false
+                                updateStatus("播报出错")
                             }
-                        }
-                        if (options.size > 0) {
-                            playSelectDialog(options, rdata.Payload?.Text, style)
-                        }else {
-                            runOnUiThread {
-                                val roomBean = RoomBean(1, "选择题没有选项/n" + rdata.Payload?.Text + "/n" + areas, "")
-                                val list = ArrayList<RoomBean>()
-                                list.add(roomBean)
-                                roomAdapter.setNewData(list)
-                                rvRoom.visibility = View.VISIBLE
-                            }
-                        }
-                    }
-                    "imageoption" -> {
-                        // 图片和选择题
-                        val imageUrl = jsonObject.getString("url")
-                        val areas = jsonObject.getJSONArray("options")
-                        val style = jsonObject.getString("style")
-                        val options = ArrayList<String>()
-                        for (index in 0 until areas.length()) {
-                            if (areas.getString(index) != null) {
-                                options.add(areas.getString(index))
-                            }
-                        }
-                        if (options.size > 0) {
-                            playSelectDialog(options, rdata.Payload?.Text, style, imageUrl)
-                        }
-                    }
-                    "popup" -> {
-                        // 弹窗
-                        val title = jsonObject.getString("title")
-                        val content = jsonObject.getString("content")
-                        val button = jsonObject.getString("button")
-                        isPauseRecord = true
-                        stopAudioRecognize()
-                        previewPopupDialog = PreviewPopupDialog(title, content, button)
-                        previewPopupDialog?.show(supportFragmentManager, PreviewImageDialog::class.java.simpleName)
-                        previewPopupDialog!!.setOnDismissListener {
-                            isPauseRecord = false
-                            startAudioRecognize()
+                            else -> updateStatus("播报状态: $speakStatus")
                         }
                     }
                 }
-            } else {
-                // 文本消息
-                if (rdata.Payload?.Type == 2) {
-                    var messageText = rdata.Payload?.Text
-                    if (messageText != null && messageText.isNotEmpty()) {
+                // Type 4: 大模型返回内容
+                4 -> {
+                    val messageText = rdata.Payload?.Text
+                    if (!messageText.isNullOrEmpty()) {
+                        Log.i(TAG, "大模型回复: $messageText")
                         runOnUiThread {
-                            val roomBean = RoomBean(1, messageText, "")
-                            val list = ArrayList<RoomBean>()
-                            list.add(roomBean)
-                            roomAdapter.setNewData(list)
-                            rvRoom.visibility = View.VISIBLE
+                            updateStatus("大模型回复中...")
                         }
                     }
+                }
+                // Type 5: 大模型思考过程内容
+                5 -> {
+                    val thinkingText = rdata.Payload?.Text
+                    if (!thinkingText.isNullOrEmpty()) {
+                        Log.i(TAG, "大模型思考: $thinkingText")
+                        runOnUiThread {
+                            updateStatus("大模型思考中...")
+                        }
+                    }
+                }
+                // Type 9: 驱动失败
+                9 -> {
+                    Log.e(TAG, "驱动失败: $text")
+                    runOnUiThread {
+                        updateStatus("驱动失败")
+                    }
+                }
+                else -> {
+                    Log.d(TAG, "其他消息类型: ${rdata.Payload?.Type}, data: $text")
                 }
             }
         }
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
             super.onOpen(webSocket, response)
-            Log.i(TAG, "-----websocket-onOpen")
-            Log.i(TAG, response.toString())
-        }
-
-        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-            super.onClosing(webSocket, code, reason)
-            Log.i(TAG, "-----websocket-onClosing")
-            Log.i(TAG, code.toString())
-        }
-
-        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            super.onClosed(webSocket, code, reason)
-            Log.i(TAG, "-----websocket-onClosed")
-            Log.i(TAG, code.toString())
+            Log.i(TAG, "WebSocket connected")
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             super.onFailure(webSocket, t, response)
-            Log.i(TAG, "-----websocket-onFailure")
-            Log.i(TAG, t.toString())
+            val errorMsg = t.message ?: t.javaClass.simpleName
+            Log.e(TAG, "WebSocket error: $errorMsg, type: ${t.javaClass.simpleName}, response: ${response?.code}")
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            super.onClosed(webSocket, code, reason)
+            Log.i(TAG, "WebSocket closed")
         }
     }
 
-    // 打开选择题弹窗或图片选择题
-    private fun playSelectDialog(areas: List<String?>, content: String?, style: String? = null, imageUrl: String? = null){
-        runOnUiThread {
-            singleChoiceDialog = SingleChoiceDialog(this, areas, content, style, imageUrl)
-            singleChoiceDialog?.onClickSingleChoiceListener = object : SingleChoiceDialog.OnClickSingleChoiceListener{
-                override fun confirmSingle(choice: String?) {
-                    choice?.let { mVirtualman.sendText(it) }
-                }
-            }
-            singleChoiceDialog?.show()
-            rvRoom.visibility = View.INVISIBLE
-            pssv_room_ask.visibility = View.GONE
-        }
-    }
-
-    private fun initImmersionBar(){
+    private fun initImmersionBar() {
         window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        or View.SYSTEM_UI_FLAG_FULLSCREEN  // 隐藏状态栏
-                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION  // 隐藏导航栏
-
-                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN  // 允许视图内容延伸到状态栏区域
-                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION  // 允许视图延伸到导航栏区域
-                        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                )
-
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val lp = window.attributes
-            lp.layoutInDisplayCutoutMode =
+            window.attributes.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            window.attributes = lp
         }
     }
 
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS =
-            mutableListOf (
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                Manifest.permission.INTERNET,
-                Manifest.permission.ACCESS_NETWORK_STATE,
-                Manifest.permission.ACCESS_WIFI_STATE,
-                Manifest.permission.MODIFY_AUDIO_SETTINGS,
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.READ_PHONE_STATE
-            ).toTypedArray()
+        private val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.INTERNET,
+            Manifest.permission.ACCESS_NETWORK_STATE
+        )
     }
 }

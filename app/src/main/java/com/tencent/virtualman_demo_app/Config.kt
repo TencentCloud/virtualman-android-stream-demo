@@ -1,18 +1,21 @@
 package com.tencent.virtualman_demo_app
 
-// 数智人及ASR等全局参数
+/**
+ * 数智人配置
+ * 请替换为您自己的配置信息
+ */
 object Config {
-    // 数智人key
+    // 数智人 AppKey
     const val APP_KEY = ""
-    // 数智人token
+    
+    // 数智人 AccessToken
     const val ACCESS_TOKEN = ""
-    // 数智人virtualmanProjectId
+    
+    // ========== 建流方式1: AssetVirtualman ==========
+    // 数智人形象 Key
+    const val ASSET_VIRTUALMAN_KEY = ""
+    
+    // ========== 建流方式2: VirtualmanProject ==========
+    // 数智人项目 ID
     const val VIRTUALMAN_PROJECT_ID = ""
-
-    // ASR账号 app id
-    const val ASR_APP_ID = 0
-    // ASR账号 SecretId
-    const val ASR_SECRET_ID = ""
-    // ASR账号 SecretKey
-    const val ASR_SECRET_KEY = ""
 }

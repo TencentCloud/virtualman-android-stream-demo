@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">数智人智慧屏</string>
+    <string name="app_name">demo</string>
+    <string name="default_input_text">这是一端测试文本，用来测试文本驱动的。重复第一遍，这是一端测试文本，用来测试文本驱动的。</string>
 </resources>
