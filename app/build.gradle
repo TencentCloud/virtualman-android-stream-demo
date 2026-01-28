@@ -43,7 +43,7 @@ android {
 
 dependencies {
     // Virtualman SDK
-   implementation files('libs/virtualman-stream-sdk-release-2.2.6.aar')
+   implementation files('libs/virtualman-stream-sdk-release-2.2.7.aar')
     
     // SDK 必要依赖
     implementation 'com.google.code.gson:gson:2.9.0'
